@@ -8,11 +8,16 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(
         validators=[UniqueValidator(queryset=User.objects.all())]
     )
+    can_add_news = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email',)
+        fields = ('id', 'username', 'email', 'can_add_news',)
         read_only_fields = ('id', 'email', )
+
+    def get_can_add_news(self, obj):
+        return obj.has_perm('novedades.add_newsitem')
+
 
 
 class TableSerializer(serializers.ModelSerializer):
@@ -24,10 +29,11 @@ class TableSerializer(serializers.ModelSerializer):
 
 
 class ColumnSerializer(serializers.ModelSerializer):
-    tab_id = serializers.PrimaryKeyRelatedField(
-        queryset=Tab.objects.all(), source='tab', required=False
-    )
     table_id = serializers.SerializerMethodField(read_only=True)
+    tab_id = serializers.PrimaryKeyRelatedField(
+        queryset=Tab.objects.all(),
+        source='tab', required=False
+    )
 
     class Meta:
         model = Column
@@ -37,6 +43,28 @@ class ColumnSerializer(serializers.ModelSerializer):
 
     def get_table_id(self, obj):
         return str(obj.tab.table_id) if obj.tab_id else None
+
+    def validate(self, attrs):
+        new_tab = attrs.get('tab')
+        
+        if new_tab:
+            # Caso 1: Actualización (Update/Patch)
+            if self.instance:
+                original_table_id = self.instance.tab.table_id
+                if new_tab.table_id != original_table_id:
+                    raise serializers.ValidationError({
+                        'tab_id': 'El tab seleccionado debe pertenecer a la misma tabla que la columna de origen.'
+                    })
+            # Caso 2: Creación (Create)
+            else:
+                view = self.context.get('view')
+                if view and 'table_id' in view.kwargs:
+                    target_table_id = view.kwargs['table_id']
+                    if str(new_tab.table_id) != str(target_table_id):
+                        raise serializers.ValidationError({
+                            'tab_id': 'El tab seleccionado debe pertenecer a la tabla especificada en la URL.'
+                        })
+        return attrs
 
 
 class RowSerializer(serializers.ModelSerializer):
@@ -101,7 +129,7 @@ class TabSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tab
         fields = ['id', 'table', 'name', 'label', 'order']
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'table']
 
 
 class CellValueSerializer(serializers.ModelSerializer):

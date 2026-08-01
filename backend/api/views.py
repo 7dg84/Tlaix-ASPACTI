@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token as AuthToken
 from .models import Table, Column, Row, Tab, CellValue
 from .serializers import UserSerializer, TableSerializer, ColumnSerializer, RowSerializer, TabSerializer, CellValueSerializer, TabViewColumnSerializer, TabViewRowSerializer
-from .permissions import CookieTokenAuthentication, CompleteDjangoObjectPermissions
+from .permissions import CookieTokenAuthentication, CompleteDjangoObjectPermissions, HasTableViewPermission, HasTabViewPermission
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt
@@ -144,7 +144,7 @@ class TableViewSet(viewsets.ModelViewSet):
 
 class ColumnViewSet(viewsets.ModelViewSet):
     queryset = Column.objects.none()
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated, HasTableViewPermission, DjangoModelPermissions, HasTabViewPermission]
     authentication_classes = [CookieTokenAuthentication, TokenAuthentication]
     serializer_class = ColumnSerializer
 
@@ -152,50 +152,46 @@ class ColumnViewSet(viewsets.ModelViewSet):
         """
         Este método filtra el queryset basándose en el table_id de la URL.
         """
-        # Get user from request
-        user = self.request.user
-        if user.is_superuser:
-            return Column.objects.all()
         # Get the table_id from the URL kwargs
         table_id = self.kwargs.get('table_id')
-
-        # Make sure the table exists
-        get_object_or_404(Table, id=table_id)
 
         # Fileter by table_id
         # queryset = Column.objects.filter(tab__table_id=table_id)
         # Filter alowed tabs columns
-        tabs = get_objects_for_user(user, 'api.view_tab', klass=Tab.objects.filter(table_id=table_id))
+        tabs = get_objects_for_user(self.request.user, 'api.view_tab', klass=Tab.objects.filter(table_id=table_id))
 
         return Column.objects.filter(tab__in=tabs)
 
     def create(self, request, *args, **kwargs):
         """
         Este método es para la acción POST (crear).
-        Necesitas asegurarte de que la nueva fila se asocie con el table_id correcto.
+        Necesitas asegurarte de que la nueva columna se asocie con el table_id correcto.
         """
         # Get the table_id from the URL kwargs
         table_id = self.kwargs.get('table_id')
-
-        # Make sure the table exists
-        get_object_or_404(Table, id=table_id)
 
         # Crea una copia mutable de los datos del request
         data = request.data.copy()
 
         # Si no viene tab_id, asigna un tab por defecto
         if not data.get('tab_id'):
-            default_tab = Tab.objects.filter(
-                table_id=table_id).order_by('order').first()
+            # default_tab = Tab.objects.filter(
+            #     table_id=table_id).order_by('order').first()
+            default_tab = get_objects_for_user(self.request.user, 'api.view_tab', klass=Tab.objects.filter(table=table_id)).order_by('order').first()
             if not default_tab:
                 default_tab = Tab.objects.create(
                     table_id=table_id,
-                    name='General',
-                    label='General',
+                    name=f'General - {request.user.username}',
+                    label=f'General - {request.user.username}',
                     order=0,
                 )
+                # assign all permissions to the user for this new tab
+                assign_perm('add_tab', self.request.user, default_tab)
+                assign_perm('change_tab', self.request.user, default_tab)
+                assign_perm('delete_tab', self.request.user, default_tab)
+                assign_perm('view_tab', self.request.user, default_tab)
             data['tab_id'] = str(default_tab.id)
-
+            
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -247,7 +243,7 @@ class RowViewSet(viewsets.ModelViewSet):
 
 class TabViewSet(viewsets.ModelViewSet):
     queryset = Tab.objects.none()
-    permission_classes = [IsAuthenticated, CompleteDjangoObjectPermissions]
+    permission_classes = [IsAuthenticated, HasTableViewPermission, CompleteDjangoObjectPermissions]
     authentication_classes = [CookieTokenAuthentication, TokenAuthentication]
     serializer_class = TabSerializer
 
@@ -258,10 +254,10 @@ class TabViewSet(viewsets.ModelViewSet):
         # Get the table_id from the URL kwargs
         table_id = self.kwargs.get('table_id')
 
-        # Make sure the table exists
-        table = get_object_or_404(Table, id=table_id)
-        # Check permisions
-        self.check_object_permissions(self.request, table)
+        # # Make sure the table exists
+        # table = get_object_or_404(Table, id=table_id)
+        # # Check permisions
+        # self.check_object_permissions(self.request, table)
 
         # Fileter by table_id
         # queryset = Tab.objects.filter(table=table_id)
@@ -275,10 +271,10 @@ class TabViewSet(viewsets.ModelViewSet):
         # Get the table_id from the URL kwargs
         table_id = self.kwargs.get('table_id')
 
-        # Make sure the table exists
-        table = get_object_or_404(Table, id=table_id)
-        # Check permisions to view the table
-        self.check_object_permissions(request, table)
+        # # Make sure the table exists
+        # table = get_object_or_404(Table, id=table_id)
+        # # Check permisions to view the table
+        # self.check_object_permissions(request, table)
 
         # Crea una copia mutable de los datos del request
         data = request.data.copy()
@@ -472,13 +468,12 @@ class TabView(APIView):
 
     def get(self, request, table_id, tab_id):
         table = get_object_or_404(Table, id=table_id)
-        self.check_object_permissions(request, table)
         tab = get_object_or_404(Tab, id=tab_id, table_id=table_id)
+        self.check_object_permissions(request, table)
         self.check_object_permissions(request, tab)
 
         columns_qs = tab.columns.all()
         # Cargamos las filas de la tabla
-        # table = Table.objects.prefetch_related('rows').get(id=table_id)
         rows_qs = table.rows.all()
 
         columns = TabViewColumnSerializer(columns_qs, many=True).data

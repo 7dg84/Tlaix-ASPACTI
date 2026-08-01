@@ -4,6 +4,7 @@ from django.conf import settings
 from guardian.shortcuts import get_objects_for_user, assign_perm
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from guardian.shortcuts import get_objects_for_user
+from django.shortcuts import get_object_or_404
 
 # Custom authentication class to support HTTPOnly cookies
 class CookieTokenAuthentication(TokenAuthentication):
@@ -89,3 +90,46 @@ class CompleteDjangoObjectPermissions(BasePermission):
         # Validamos si el usuario tiene estos permisos Específicamente sobre esta instancia (obj)
         # Esto delegará al backend de django-guardian
         return request.user.has_perms(perms, obj)
+    
+    
+class HasTableViewPermission(BasePermission):
+    """
+    Permiso personalizado para verificar si el usuario tiene permiso de vista sobre la tabla asociada.
+    """
+
+    def has_permission(self, request, view):
+        # Primero requiere estar autenticado
+        if not request.user.is_authenticated:
+            return False
+
+        # Obtener el table_id de los kwargs de la URL
+        table_id = view.kwargs.get('table_id')
+        if not table_id:
+            return False  # No hay table_id en la URL
+
+        # Obtener la tabla y verificar si el usuario tiene permiso de vista sobre ella
+        from api.models import Table  # Importar aquí para evitar problemas de importación circular
+        try:
+            table = Table.objects.get(id=table_id)
+        except Table.DoesNotExist:
+            return False  # La tabla no existe
+
+        # Verificar si el usuario tiene permiso de vista sobre esta tabla
+        return request.user.has_perm('api.view_table', table)
+    
+
+class HasTabViewPermission(BasePermission):
+    """
+    Permiso personalizado para verificar si el usuario tiene permiso de vista sobre el tab asociado.
+    """
+    
+    def has_object_permission(self, request, view, obj):
+        """
+        Validación a nivel de instancia/objeto individual (retrieve, update, destroy).
+        """
+        from .models import Tab  # Importar aquí para evitar problemas de importación circular
+        model_cls = Tab
+        
+        # Validamos si el usuario tiene estos permisos Específicamente sobre esta instancia (obj)
+        # Esto delegará al backend de django-guardian
+        return request.user.has_perms([f'{model_cls._meta.app_label}.view_{model_cls._meta.model_name}'], obj.tab)  # Verifica el permiso sobre el tab asociado al objeto

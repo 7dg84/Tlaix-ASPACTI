@@ -3,7 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from api.models import Table, Tab
+from api.models import Table, Tab, Column
 from guardian.shortcuts import assign_perm, get_perms
 
 class TablePermissionsTestCase(APITestCase):
@@ -162,7 +162,124 @@ class TablePermissionsTestCase(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
-        # Has view permission on the tab -> 200 OK
+        # Has view permission on both the table and the tab -> 200 OK
+        assign_perm('view_table', self.regular_user, self.table)
         assign_perm('view_tab', self.regular_user, self.tab)
+        # Clear permissions cache on regular_user
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
         response2 = self.client.get(url)
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
+
+    def test_create_column_valid_tab(self):
+        """Creating a column with a tab belonging to the same table succeeds."""
+        # Grant Table and Tab view permissions to clear ViewSet permissions
+        assign_perm('view_table', self.regular_user, self.table)
+        assign_perm('view_tab', self.regular_user, self.tab)
+        
+        content_type = ContentType.objects.get_for_model(Column)
+        add_col_perm = Permission.objects.get(codename='add_column', content_type=content_type)
+        self.regular_user.user_permissions.add(add_col_perm)
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
+
+        url = f'/api/tables/{self.table.id}/columns/'
+        data = {
+            'tab_id': str(self.tab.id),
+            'name': 'Valid Column',
+            'type': 'text',
+            'order': 0,
+            'is_required': False
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_create_column_invalid_tab(self):
+        """Creating a column with a tab belonging to a different table fails (400 Bad Request)."""
+        # Grant Table view permission
+        assign_perm('view_table', self.regular_user, self.table)
+        
+        content_type = ContentType.objects.get_for_model(Column)
+        add_col_perm = Permission.objects.get(codename='add_column', content_type=content_type)
+        self.regular_user.user_permissions.add(add_col_perm)
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
+
+        # Create another table and tab
+        other_table = Table.objects.create(name='Other Table', description='Other')
+        other_tab = Tab.objects.create(table=other_table, name='Other Tab', label='Other Tab', order=0)
+
+        url = f'/api/tables/{self.table.id}/columns/'
+        data = {
+            'tab_id': str(other_tab.id),
+            'name': 'Invalid Column',
+            'type': 'text',
+            'order': 0,
+            'is_required': False
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tab_id', response.data)
+
+    def test_update_column_valid_tab(self):
+        """Updating a column's tab to a tab belonging to the same table succeeds."""
+        column = Column.objects.create(tab=self.tab, name='Test Column', type='text', order=0)
+
+        # Grant Table and Tab view permissions
+        assign_perm('view_table', self.regular_user, self.table)
+        assign_perm('view_tab', self.regular_user, self.tab)
+
+        content_type = ContentType.objects.get_for_model(Column)
+        change_col_perm = Permission.objects.get(codename='change_column', content_type=content_type)
+        self.regular_user.user_permissions.add(change_col_perm)
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
+
+        # Create another tab in the same table and grant view permission on it
+        another_tab = Tab.objects.create(table=self.table, name='Another Tab', label='Another Tab', order=1)
+        assign_perm('view_tab', self.regular_user, another_tab)
+        
+        # Clear permissions cache on regular_user
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
+
+        url = f'/api/tables/{self.table.id}/columns/{column.id}/'
+        data = {
+            'tab_id': str(another_tab.id),
+            'name': column.name,
+            'type': column.type,
+            'order': column.order,
+            'is_required': column.is_required
+        }
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_update_column_invalid_tab(self):
+        """Updating a column's tab to a tab belonging to a different table fails (400 Bad Request)."""
+        column = Column.objects.create(tab=self.tab, name='Test Column', type='text', order=0)
+
+        # Grant Table and Tab view permissions
+        assign_perm('view_table', self.regular_user, self.table)
+        assign_perm('view_tab', self.regular_user, self.tab)
+
+        content_type = ContentType.objects.get_for_model(Column)
+        change_col_perm = Permission.objects.get(codename='change_column', content_type=content_type)
+        self.regular_user.user_permissions.add(change_col_perm)
+        self.regular_user = User.objects.get(id=self.regular_user.id)
+        self.client.force_authenticate(user=self.regular_user)
+
+        # Create another table and tab
+        other_table = Table.objects.create(name='Other Table', description='Other')
+        other_tab = Tab.objects.create(table=other_table, name='Other Tab', label='Other Tab', order=0)
+
+        url = f'/api/tables/{self.table.id}/columns/{column.id}/'
+        data = {
+            'tab_id': str(other_tab.id),
+            'name': column.name,
+            'type': column.type,
+            'order': column.order,
+            'is_required': column.is_required
+        }
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tab_id', response.data)

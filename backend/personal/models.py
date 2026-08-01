@@ -33,3 +33,8 @@ class Relation(models.Model):
 
     def __str__(self):
         return f"{self.personal.clave_empleado} - {self.table.name} - {self.row.name}"
+
+class Verify(models.Model):
+    hash = models.CharField(max_length=256, unique=True, primary_key=True)
+    personal = models.ForeignKey(Personal, on_delete=models.CASCADE, related_name='personal_verify')
+    qr = models.ImageField(upload_to='personal/qr/', blank=True, null=True)

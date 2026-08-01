@@ -1,7 +1,8 @@
 from rest_framework import viewsets
-from .models import Relation, Personal
+from .models import Relation, Personal, Verify
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
+from api.permissions import CookieTokenAuthentication
 from rest_framework.decorators import permission_classes, authentication_classes, api_view
 from .serializers import RelationSerializer, PersonalSerializer
 from rest_framework.response import Response
@@ -126,3 +127,59 @@ def check(request):
     #     cell_lugar.save()
 
     return Response({'message': 'Check successful'}, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([CookieTokenAuthentication, TokenAuthentication])
+def recent_checks(request):
+    # 1. Obtener celdas correspondientes a horas de asistencia (Asistencia, termina con _hora)
+    time_cells = CellValue.objects.filter(
+        column__tab__name='Asistencia',
+        column__name__endswith='_hora'
+    ).select_related('row', 'column').order_by('-value_text')[:50]
+    
+    # 2. Obtener todas las relaciones para cruzar Row -> Personal en memoria
+    relations = {
+        rel.row_id: rel.personal 
+        for rel in Relation.objects.select_related('personal').all()
+    }
+    
+    # 3. Armar los resultados con la URL absoluta de la foto
+    results = []
+    for cell in time_cells:
+        personal = relations.get(cell.row_id)
+        if not personal:
+            continue
+            
+        results.append({
+            'clave_empleado': personal.clave_empleado,
+            'nombre_completo': f"{personal.nombre} {personal.apellido_paterno} {personal.apellido_materno}",
+            'plantel': personal.plantel,
+            'foto': personal.foto.url if personal.foto else None,
+            'fecha_hora': cell.value_text,
+        })
+        
+    return Response(results, status=200)
+
+# @permission_classes([IsAuthenticated])
+# @authentication_classes([TokenAuthentication])
+@csrf_exempt
+@api_view(['GET'])
+def verify(request, hash):
+
+    try:
+        verify_instance = Verify.objects.get(hash=hash)
+    except Verify.DoesNotExist:
+        return Response({'error': 'Hash not found'}, status=404)
+
+    personal = verify_instance.personal
+
+    return Response({
+        'nombre_completo': f"{personal.nombre} {personal.apellido_paterno} {personal.apellido_materno}",
+        'plantel': personal.plantel,
+        'clave_empleado': personal.clave_empleado,
+        'foto': personal.foto.url if personal.foto else None,
+        'correo': personal.correo,
+        'nivel_educativo': personal.nivel_educativo,
+    }, status=200)

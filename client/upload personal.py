@@ -21,6 +21,20 @@ def gen_qr(no):
 
     img = qr.make_image(fill_color="black", back_color="white")
     img.save(f"qrs/{no}.png")
+    
+    
+def gen_qr_2(no, fullName, plantel):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(f"Nombre: {fullName}, Plantel: {plantel}, Clave: {no}, ASPACTI")
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(f"qrs/{no}.png")
 
 
 def main():
@@ -79,9 +93,10 @@ def main():
         # }
         print(data)
         # gen_qr(data['clave_empleado'])
-        api = Api("http://tlaix.smart-food.cc",
-                  jwt_token="1490f31d590620a38ad1edbe5dc917fe1c443cfe")
-        print(api.upload_personal(data), data, end="\n\n")
+        gen_qr_2(data['clave_empleado'], f"{data['nombre']} {data['apellido_paterno']} {data['apellido_materno']}", data['plantel'])
+        # api = Api("http://tlaix.smart-food.cc",
+        #           jwt_token="1490f31d590620a38ad1edbe5dc917fe1c443cfe")
+        # print(api.upload_personal(data), data, end="\n\n")
 
 
 if __name__ == "__main__":
