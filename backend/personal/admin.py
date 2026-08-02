@@ -1,4 +1,7 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
+from import_export.admin import ImportExportModelAdmin
+from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from .models import Personal, Relation, Verify
 
 # Action to generate hash for selected Personal instances
@@ -53,17 +56,21 @@ def generate_qr_code(modeladmin, request, queryset):
 
 
 @admin.register(Personal)
-class PersonalAdmin(admin.ModelAdmin):
+class PersonalAdmin(ModelAdmin, ImportExportModelAdmin):
+    import_form_class = ImportForm
+    export_form_class = ExportForm
     list_display = ('clave_empleado', 'nombre', 'apellido_paterno', 'plantel')
     actions = [generate_hash, generate_qr_code]
 
 
 @admin.register(Relation)
-class RelationAdmin(admin.ModelAdmin):
+class RelationAdmin(ModelAdmin):
     list_display = ('personal', 'table', 'row')
     
         
 @admin.register(Verify)
-class VerifyAdmin(admin.ModelAdmin):
+class VerifyAdmin(ModelAdmin):
+    import_form_class = ImportForm
+    export_form_class = ExportForm
     list_display = ('hash', 'personal', 'qr')
     actions = []

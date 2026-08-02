@@ -1,0 +1,63 @@
+{% extends "unfold/layouts/parent.html" %}
+
+{% block content %}
+<div className="container mx-auto px-4 py-6 space-y-6">
+    <!-- Header -->
+    <div className="flex justify-between items-center mb-6">
+        <div>
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">Monitoreo de Asistencia</h1>
+            <p className="text-sm text-gray-500 mt-1">Últimos checks de personal registrados</p>
+        </div>
+    </div>
+
+    <!-- Feed de Checks Recientes -->
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-200">Historial de Accesos</h3>
+        </div>
+        
+        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {% if records %}
+                {% for record in records %}
+                    <div className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                        <div className="flex items-center space-x-4">
+                            <!-- Avatar de Empleado -->
+                            {% if record.foto %}
+                                <img src="{{ record.foto }}" className="w-12 h-12 rounded-full object-cover border-2 border-primary-500/20" alt="{{ record.nombre_completo }}">
+                            {% else %}
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white">
+                                    {{ record.nombre_completo|slice:":2"|upper }}
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Info -->
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white">{{ record.nombre_completo }}</h4>
+                                <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
+                                    <span>ID: {{ record.clave_empleado }}</span>
+                                    <span>•</span>
+                                    <span className="bg-primary-50 dark:bg-primary-950 text-primary-600 dark:text-primary-400 px-2 py-0.5 rounded-full font-medium">
+                                        {{ record.plantel }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Fecha y Hora -->
+                        <div className="text-right">
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                                {{ record.fecha_hora|slice:"11:19" }} <!-- Extrae la hora HH:MM:SS -->
+                            </span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{{ record.fecha_hora|slice:":10" }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div className="p-8 text-center text-gray-500">
+                    No se han registrado entradas de asistencia recientemente.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

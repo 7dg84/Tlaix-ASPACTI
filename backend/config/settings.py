@@ -38,6 +38,9 @@ else:
     CSRF_TRUSTED_ORIGINS = []
 
 INSTALLED_APPS = [
+    'unfold',
+    'unfold.contrib.guardian',
+    'unfold.contrib.import_export',
     'guardian',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -52,6 +55,7 @@ INSTALLED_APPS = [
     'students',
     'personal',
     'novedades',
+    'import_export',
 ]
 
 MIDDLEWARE = [
@@ -162,3 +166,13 @@ AUTH_TOKEN_COOKIE_HTTPONLY = True
 AUTH_TOKEN_COOKIE_SECURE = False  # Set to True in production with HTTPS
 AUTH_TOKEN_COOKIE_SAMESITE = 'Lax'
 AUTH_TOKEN_COOKIE_AGE = 86400 * 7  # 7 days
+
+# Unfold
+COMPANY = os.environ.get('COMPANY', 'default_secret')
+UNFOLD = {
+    "SITE_HEADER": f"TLAIX - {COMPANY}",
+    "SITE_TITLE": f"TLAIX - {COMPANY}",
+    "INDEX_TITLE": f"TLAIX - {COMPANY}",
+    
+    
+}
