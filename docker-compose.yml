@@ -36,7 +36,7 @@ services:
 
   react:
     build:
-      context: ./frontend/tabula-dash-flow
+      context: ./frontend
     networks:
       - internal_net
     depends_on:

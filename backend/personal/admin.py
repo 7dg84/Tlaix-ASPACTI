@@ -3,6 +3,7 @@ from unfold.admin import ModelAdmin
 from import_export.admin import ImportExportModelAdmin
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from .models import Personal, Relation, Verify
+from import_export import resources
 
 # Action to generate hash for selected Personal instances
 @admin.action(description='Generate Hash for Selected Personal')
@@ -67,9 +68,15 @@ class PersonalAdmin(ModelAdmin, ImportExportModelAdmin):
 class RelationAdmin(ModelAdmin):
     list_display = ('personal', 'table', 'row')
     
-        
+class VerifyResource(resources.ModelResource):
+    class Meta:
+        model = Verify
+        fields = ('hash', 'personal__clave_empleado', 'personal__nombre', 'personal__apellido_paterno', 'personal__plantel', 'qr')
+        export_order = ('hash', 'personal__clave_empleado', 'personal__nombre', 'personal__apellido_paterno', 'personal__plantel', 'qr')
+
 @admin.register(Verify)
-class VerifyAdmin(ModelAdmin):
+class VerifyAdmin(ModelAdmin, ImportExportModelAdmin):
+    resource_class = VerifyResource
     import_form_class = ImportForm
     export_form_class = ExportForm
     list_display = ('hash', 'personal', 'qr')
