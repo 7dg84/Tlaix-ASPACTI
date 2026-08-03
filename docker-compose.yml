@@ -37,6 +37,8 @@ services:
   react:
     build:
       context: ./frontend
+    ports:
+      - "80:80"
     networks:
       - internal_net
     depends_on:
